@@ -256,6 +256,103 @@ static int inet_global_gethostname(lua_State *L)
 * Enumerate all locally configured IP addresses
 \*-------------------------------------------------------------------------*/
 
+#ifdef _WIN32
+
+#include <iphlpapi.h>
+
+static void push_winerr(lua_State *L, DWORD err){
+  LPVOID lpMsgBuf = NULL;
+  if(FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+    FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+    NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+    (LPTSTR) & lpMsgBuf, 0, NULL)
+  ){
+    lua_pushstring(L, (LPTSTR)lpMsgBuf);
+    LocalFree(lpMsgBuf);
+  }
+  else lua_pushnumber(L, err);
+}
+
+#define WORKING_BUFFER_SIZE 15000
+#define MAX_TRIES 3
+
+#define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
+#define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
+
+static DWORD call_GetAdaptersAddresses(int ipv4, int ipv6, ULONG flags, PIP_ADAPTER_ADDRESSES *res){
+  PIP_ADAPTER_ADDRESSES pAddresses = NULL;
+  UINT n = 0;
+  DWORD dwRetVal, outBufLen = WORKING_BUFFER_SIZE;
+  ULONG family;
+
+  *res = NULL;
+  if(ipv4 && ipv6) family = AF_UNSPEC;
+  else if(ipv4) family = AF_INET;
+  else family = AF_INET6;
+
+  do {
+    pAddresses = (IP_ADAPTER_ADDRESSES *) MALLOC(outBufLen);
+    if(pAddresses == NULL) return ERROR_OUTOFMEMORY;
+    dwRetVal = GetAdaptersAddresses(family, flags, NULL, pAddresses, &outBufLen);
+    if(dwRetVal == NO_ERROR){
+      *res = pAddresses;
+      return NO_ERROR;
+    }
+    FREE(pAddresses);
+    if(dwRetVal != ERROR_BUFFER_OVERFLOW) return dwRetVal;
+  }while((++n) < MAX_TRIES);
+
+  return ERROR_OUTOFMEMORY; // ????
+}
+
+#endif
+
+static void push_sockaddr(lua_State *L, struct sockaddr *sa){
+  union {
+      struct sockaddr     *sa;
+      struct sockaddr_in  *sa4;
+      struct sockaddr_in6 *sa6;
+  } peer;
+  char tmp[INET6_ADDRSTRLEN] = "";
+  peer.sa = sa;
+
+  switch(sa->sa_family){
+  case AF_INET:
+    inet_ntop(AF_INET, &peer.sa4->sin_addr, tmp, sizeof(tmp));
+    lua_pushstring(L, tmp);
+    break;
+  case AF_INET6:
+    inet_ntop(AF_INET6, &peer.sa6->sin6_addr, tmp, sizeof(tmp));
+    lua_pushstring(L, tmp);
+    break;
+  default:
+    lua_pushliteral(L, "");
+  }
+}
+
+static int is_skip_addr(int link_local, struct sockaddr *sa){
+  /* Link-local IPv4 addresses; see RFC 3927 and RFC 5735 */
+  const long ip4_linklocal = htonl(0xa9fe0000); /* 169.254.0.0 */
+  const long ip4_mask      = htonl(0xffff0000);
+  union {
+      struct sockaddr     *sa;
+      struct sockaddr_in  *sa4;
+      struct sockaddr_in6 *sa6;
+  } peer;
+  peer.sa = sa;
+  switch(sa->sa_family){
+  case AF_INET:
+    if(link_local) return 0;
+    return ((peer.sa4->sin_addr.s_addr & ip4_mask) == ip4_linklocal)?1:0;
+  case AF_INET6:
+    if (!link_local && IN6_IS_ADDR_LINKLOCAL(&peer.sa6->sin6_addr))
+        return 1;
+    if (IN6_IS_ADDR_V4MAPPED(&peer.sa6->sin6_addr) || IN6_IS_ADDR_V4COMPAT(&peer.sa6->sin6_addr))
+        return 1;
+  }
+  return 0;
+}
+
 const char * const type_strings[] = {
     "both",
     "ipv4",
@@ -265,19 +362,18 @@ const char * const type_strings[] = {
 
 int inet_global_local_addresses(lua_State *L)
 {
-    /* Link-local IPv4 addresses; see RFC 3927 and RFC 5735 */
-    const long ip4_linklocal = htonl(0xa9fe0000); /* 169.254.0.0 */
-    const long ip4_mask      = htonl(0xffff0000);
-#ifndef _WIN32
-    struct ifaddrs *addr = NULL, *a;
-    int n = 1;
-#endif
     int type = luaL_checkoption(L, 1, "both", type_strings);
     const char link_local = lua_toboolean(L, 2); /* defaults to 0 (false) */
     const char ipv4 = (type == 0 || type == 1);
     const char ipv6 = (type == 0 || type == 2);
 
 #ifndef _WIN32
+    /* Link-local IPv4 addresses; see RFC 3927 and RFC 5735 */
+    const long ip4_linklocal = htonl(0xa9fe0000); /* 169.254.0.0 */
+    const long ip4_mask      = htonl(0xffff0000);
+    struct ifaddrs *addr = NULL, *a;
+    int n = 1;
+
     if (getifaddrs(&addr) < 0) {
         lua_pushnil(L);
         lua_pushfstring(L, "getifaddrs failed (%d): %s", errno,
@@ -322,6 +418,42 @@ int inet_global_local_addresses(lua_State *L)
     freeifaddrs(addr);
 
     return 1;
+#else
+{
+  int ret_count = 1;
+  PIP_ADAPTER_ADDRESSES pAddresses = NULL;
+  DWORD dwRetVal = call_GetAdaptersAddresses(//{
+    ipv4, ipv6,
+    GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_ANYCAST | 
+    GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_SKIP_FRIENDLY_NAME,
+    &pAddresses
+  );//}
+  if(dwRetVal == NO_ERROR){
+    PIP_ADAPTER_ADDRESSES cur = pAddresses;
+    UINT i = 0;
+    lua_newtable(L);
+    for(;cur;cur = cur->Next){
+      PIP_ADAPTER_UNICAST_ADDRESS addr;
+      if(cur->IfType == MIB_IF_TYPE_LOOPBACK) continue;
+      for(addr = cur->FirstUnicastAddress;addr;addr=addr->Next){
+        if(!is_skip_addr(link_local, addr->Address.lpSockaddr)){
+          push_sockaddr(L, addr->Address.lpSockaddr);
+          lua_rawseti(L, -2, ++i);
+        }
+      }
+    }
+  }
+  else if(dwRetVal == ERROR_NO_DATA){
+    lua_newtable(L);
+  }
+  else{
+    lua_pushnil(L);
+    push_winerr(L, dwRetVal);
+    ret_count = 2;
+  }
+  if(pAddresses)FREE(pAddresses);
+  return ret_count;
+}
 #endif
 }
 
