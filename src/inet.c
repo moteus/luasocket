@@ -308,27 +308,17 @@ static DWORD call_GetAdaptersAddresses(int ipv4, int ipv6, ULONG flags, PIP_ADAP
 
 #endif
 
-static void push_sockaddr(lua_State *L, struct sockaddr *sa){
-  union {
-      struct sockaddr     *sa;
-      struct sockaddr_in  *sa4;
-      struct sockaddr_in6 *sa6;
-  } peer;
+static int push_sockaddr(lua_State *L, struct sockaddr *sa){
   char tmp[INET6_ADDRSTRLEN] = "";
-  peer.sa = sa;
-
-  switch(sa->sa_family){
-  case AF_INET:
-    inet_ntop(AF_INET, &peer.sa4->sin_addr, tmp, sizeof(tmp));
-    lua_pushstring(L, tmp);
-    break;
-  case AF_INET6:
-    inet_ntop(AF_INET6, &peer.sa6->sin6_addr, tmp, sizeof(tmp));
-    lua_pushstring(L, tmp);
-    break;
-  default:
-    lua_pushliteral(L, "");
+  socklen_t addr_len = sizeof(struct sockaddr);
+  int err = getnameinfo(sa, addr_len, tmp, sizeof(tmp), NULL, 0, NI_NUMERICHOST);
+  if (err) {
+    lua_pushnil(L);
+    lua_pushstring(L, gai_strerror(err));
+      return 2;
   }
+  lua_pushstring(L, tmp);
+  return 1;
 }
 
 static int is_skip_addr(int link_local, struct sockaddr *sa){
@@ -399,20 +389,19 @@ int inet_global_local_addresses(lua_State *L)
             if (!link_local &&
                     ((sa->sin_addr.s_addr & ip4_mask) == ip4_linklocal))
                 continue;
-            tmp = inet_ntop(family, &sa->sin_addr, ipaddr, sizeof(ipaddr));
         } else if (ipv6 && family == AF_INET6) {
             struct sockaddr_in6 *sa = (struct sockaddr_in6 *)a->ifa_addr;
             if (!link_local && IN6_IS_ADDR_LINKLOCAL(&sa->sin6_addr))
                 continue;
             if (IN6_IS_ADDR_V4MAPPED(&sa->sin6_addr) || IN6_IS_ADDR_V4COMPAT(&sa->sin6_addr))
                 continue;
-            tmp = inet_ntop(family, &sa->sin6_addr, ipaddr, sizeof(ipaddr));
         }
+        else continue;
 
-        if (tmp != NULL) {
-            lua_pushstring(L, tmp);
-            lua_rawseti(L, -2, n++);
-        }
+        int k = push_sockaddr(L, a->ifa_addr);
+        if(k == 1) lua_rawseti(L, -2, n++);
+        else lua_pop(L, k);
+
         /* TODO: Error reporting? */
     }
 
@@ -438,8 +427,9 @@ int inet_global_local_addresses(lua_State *L)
       if(cur->IfType == MIB_IF_TYPE_LOOPBACK) continue;
       for(addr = cur->FirstUnicastAddress;addr;addr=addr->Next){
         if(!is_skip_addr(link_local, addr->Address.lpSockaddr)){
-          push_sockaddr(L, addr->Address.lpSockaddr);
-          lua_rawseti(L, -2, ++i);
+          int n = push_sockaddr(L, addr->Address.lpSockaddr);
+          if(n == 1) lua_rawseti(L, -2, ++i);
+          else lua_pop(L, n);
         }
       }
     }
