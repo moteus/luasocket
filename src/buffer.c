@@ -12,6 +12,7 @@
 \*=========================================================================*/
 static int recvraw(p_buffer buf, size_t wanted, luaL_Buffer *b);
 static int recvline(p_buffer buf, luaL_Buffer *b);
+static int recvsome(p_buffer buf, size_t wanted, luaL_Buffer *b);
 static int recvall(p_buffer buf, luaL_Buffer *b);
 static int buffer_get(p_buffer buf, const char **data, size_t *count);
 static void buffer_skip(p_buffer buf, size_t count);
@@ -123,11 +124,19 @@ int buffer_meth_receive(lua_State *L, p_buffer buf) {
         const char *p= luaL_optstring(L, 2, "*l");
         if (p[0] == '*' && p[1] == 'l') err = recvline(buf, &b);
         else if (p[0] == '*' && p[1] == 'a') err = recvall(buf, &b); 
+        else if (p[0] == '*' && p[1] == 'r'){
+            if (size == 0){
+                lua_Number n = luaL_optnumber(L, 4, 4096);
+                size_t max_chunk = (size_t) n;
+                luaL_argcheck(L, max_chunk >= 0, 4, "invalid receive pattern");
+                err = recvsome(buf, max_chunk, &b);
+            }
+        }
         else luaL_argcheck(L, 0, 2, "invalid receive pattern");
     /* get a fixed number of bytes (minus what was already partially 
      * received) */
     } else {
-        double n = lua_tonumber(L, 2); 
+        lua_Number n = lua_tonumber(L, 2);
         size_t wanted = (size_t) n;
         luaL_argcheck(L, n >= 0, 2, "invalid receive pattern");
         if (size == 0 || wanted > size)
@@ -198,6 +207,22 @@ static int recvraw(p_buffer buf, size_t wanted, luaL_Buffer *b) {
         buffer_skip(buf, count);
         total += count;
         if (total >= wanted) break;
+    }
+    return err;
+}
+
+/*-------------------------------------------------------------------------*\
+* Reads some available data (buffered)
+\*-------------------------------------------------------------------------*/
+static int recvsome(p_buffer buf, size_t wanted, luaL_Buffer *b) {
+    int err = IO_DONE;
+    while (err == IO_DONE) {
+        size_t count; const char *data;
+        err = buffer_get(buf, &data, &count);
+        if(count > wanted) count = wanted;
+        luaL_addlstring(b, data, count);
+        buffer_skip(buf, count);
+        if (err == IO_DONE) break;
     }
     return err;
 }

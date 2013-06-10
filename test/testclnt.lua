@@ -484,7 +484,6 @@ function getstats_test()
     pass("ok")
 end
 
-
 ------------------------------------------------------------------------
 function test_nonblocking(size) 
     reconnect()
@@ -520,6 +519,68 @@ remote(string.format([[
     data:settimeout(-1)
     local back = data:receive(2*size)
     assert(back == str, "'" .. back .. "' vs '" .. str .. "'")
+    pass("ok")
+end
+
+------------------------------------------------------------------------
+function test_nonblocking_reseivesome(size, chunk_size) 
+    chunk_size = chunk_size or 1
+    reconnect()
+    printf("testing "  .. size .. " bytes by " .. chunk_size .. ": ")
+    remote(string.format([[
+        data:send(string.rep("a", %d))
+    ]], size))
+    local err = "timeout"
+    local total = 0
+    local part
+    local chunk
+    local begin_t = socket.gettime()
+    local elapsed
+
+    data:settimeout(0)
+    while 1 do
+        chunk, err, part = data:receive("*r", part, chunk_size)
+        if err == "timeout" then
+        elseif err then break
+        else
+            if #chunk > chunk_size then
+                fail( "chunk size: %d, but expected: <= %d ", #chunk, chunk_size)
+            end
+            total = total + #chunk
+            if total == size then pass("ok") return end
+        end
+        elapsed = socket.gettime() - begin_t
+        if elapsed > 60 then break end
+    end
+    fail(err or 'timeout')
+end
+
+------------------------------------------------------------------------
+function test_reseivesome() 
+    chunk_size = chunk_size or 1
+    reconnect()
+    printf("testing : ")
+    remote([[
+        data:send("123456")
+    ]])
+
+    for i = 1, 10 do
+        local str, err = data:receive("*r", "hello")
+        if err then fail(err) end
+        if str ~= "hello" then fail("expected: '%s', got: '%s'", "hello", str) end
+        socket.sleep(0.1)
+    end
+
+    local str, err = data:receive("*r", "hello", 4)
+    if err then fail(err) end
+    if str ~= "hello" then fail("expected: '%s', got: '%s'", "hello", str) end
+
+    str = data:receive("*r", nil, 2) -- read first 
+    if str ~= "12" then fail("expected: '%s', got: '%s'", "12", str) end
+
+    str = data:receive("*r")
+    if str ~= "3456" then fail("expected: '%s', got: '%s'", "3456", str) end
+
     pass("ok")
 end
 
@@ -674,6 +735,9 @@ if sock then test_methods(socket.udp6(), udp_methods)
 else io.stderr:write("Warning! IPv6 does not support!\n") end
 end
 
+test("receive some")
+test_reseivesome()
+
 test("partial receive")
 test_partialrecv()
 
@@ -769,6 +833,20 @@ test_nonblocking(4091)
 test_nonblocking(200)
 test_nonblocking(17)
 test_nonblocking(1)
+
+test("non-blocking transfer recivesome")
+test_nonblocking_reseivesome(1)
+test_nonblocking_reseivesome(17)
+test_nonblocking_reseivesome(200)
+test_nonblocking_reseivesome(4091)
+test_nonblocking_reseivesome(80199)
+test_nonblocking_reseivesome(8000000)
+test_nonblocking_reseivesome(8000000, 4096)
+test_nonblocking_reseivesome(80199)
+test_nonblocking_reseivesome(4091)
+test_nonblocking_reseivesome(200)
+test_nonblocking_reseivesome(17)
+test_nonblocking_reseivesome(1)
 
 test("total timeout on send")
 test_totaltimeoutsend(800091, 1, 3)
