@@ -164,7 +164,7 @@ DEF_mingw= -DLUASOCKET_INET_PTON -DLUASOCKET_$(DEBUG) -DLUA_$(COMPAT)_MODULE \
 	-DMIME_API='__declspec(dllexport)'
 CFLAGS_mingw= -I$(LUAINC) $(DEF) -pedantic -Wall -O2 -fno-common \
 	-fvisibility=hidden
-LDFLAGS_mingw= $(LUALIB) -shared -Wl,-s -lws2_32 -o 
+LDFLAGS_mingw= $(LUALIB) -shared -Wl,-s -lws2_32 -liphlpapi -o 
 LD_mingw=gcc
 SOCKET_mingw=wsocket.o
 
