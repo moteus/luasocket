@@ -1,0 +1,88 @@
+if LUA_VER == '5.2' then
+  LUA_NEED = 'lua52'
+  LUA_DIR  = ENV.LUA_DIR_5_2 or ENV.LUA_DIR
+  LUA_RUNNER = 'lua52'
+else
+  LUA_NEED = 'lua'
+  LUA_DIR  = ENV.LUA_DIR
+  LUA_RUNNER = 'lua'
+end
+
+ROOT       = ROOT   or J(LUA_DIR, 'libs', 'luasocket')
+LUADIR     = LUADIR or J(ROOT, 'share')
+LIBDIR     = LIBDIR or J(ROOT, 'share')
+DYNAMIC    = as_bool(DYNAMIC, false)
+WINVER     = IF(WINDOWS, WINVER or '501', '')
+EXPORT_API = IF(WINDOWS, '__declspec(dllexport)', '')
+
+local N = tonumber
+
+DEFS = L{
+  IF(DEBUG,  {'_DEBUG', 'DEBUG'},'NDEBUG');
+  IF(DEBUG,  'LUASOCKET_DEBUG');
+  IF(WINDOWS,{'WIN32','_WIN32','_WINDOWS'});
+  IF(WINDOWS,'_WIN32_WINNT=0x0' .. WINVER);
+  IF(WINDOWS and N(WINVER) < 600, 'LUASOCKET_INET_PTON'),
+  IF(MSVC,   '_CRT_SECURE_NO_WARNINGS');
+}
+
+mime =  c.shared{'core',
+  base = 'src';
+  odir = 'mime',
+  src  = 'mime.c';
+  defines  = L('MIME_EXPORTS', 'MIME_API=' .. EXPORT_API, DEFS);
+  llua = 'mime.core';
+  needs=LUA_NEED;
+  dynamic = DYNAMIC;
+}
+
+socket = c.shared{'core',
+  base='src';
+  odir = 'socket',
+  src='*.c';
+  exclude = L('mime', IF(WINDOWS, {'usocket','unix','serial'}, 'wsocket'));
+  defines = L(
+    'LUASOCKET_EXPORTS', 
+    'LUASOCKET_API=' .. EXPORT_API,
+    IF(WINDOWS and not MSVC, "IPV6_V6ONLY=7"),
+    DEFS
+  );
+  llua = 'socket.core';
+  needs = {LUA_NEED,IF(WINDOWS, 'winsock2', 'sockets')};
+  libs  = IF(WINDOWS, "IPHLPAPI");
+  dynamic = DYNAMIC;
+}
+
+target('build',{mime,socket})
+
+install = target('install', {
+  file.group{odir=LUADIR, src = each_join('src', {'mime.lua', 'socket.lua', 'ltn12.lua'})};
+  file.group{odir=J(LUADIR, 'socket'), 
+    src = each_join('src', {'ftp.lua', 'headers.lua', 'http.lua', 'smtp.lua', 'tp.lua', 'url.lua'}),
+  };
+  file.group{odir=J(LIBDIR, 'mime');   src = mime  };
+  file.group{odir=J(LIBDIR, 'socket'); src = socket};
+  file.group{odir=J(ROOT, 'doc'), src = J('doc','*')};
+  file.group{odir=J(ROOT, 'test'), src = J('test','*.*'), recurse=true};
+})
+
+target('test', install, function()
+  local test_dir = J(ROOT, 'test')
+  if spawn(J(test_dir, 'testsrvr.lua'), test_dir) then
+    run(J(test_dir, 'testclnt.lua'), test_dir)
+  end
+  run(J(test_dir, 'hello.lua'                    ), test_dir)
+  run(J(test_dir, 'stufftest.lua'                ), test_dir)
+  run(J(test_dir, 'excepttest.lua'               ), test_dir)
+  run(J(test_dir, 'test_bind.lua'                ), test_dir)
+  run(J(test_dir, 'test_getaddrinfo.lua'         ), test_dir)
+  run(J(test_dir, 'ltn12test.lua'                ), test_dir)
+  run(J(test_dir, 'mimetest.lua'                 ), test_dir)
+  run(J(test_dir, 'urltest.lua'                  ), test_dir)
+  run(J(test_dir, 'udp_send_recv.lua'            ), test_dir)
+  run(J(test_dir, 'test_setfd.lua'               ), test_dir)
+  run(J(test_dir, 'test_local_address.lua'       ), test_dir)
+  run(J(test_dir, 'test_socket_error.lua'        ), test_dir)
+end)
+
+default('build')
