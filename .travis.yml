@@ -36,7 +36,7 @@ install:
 script: 
   - cd test
   - lua$LUA_SFX hello.lua
-  - lua$LUA_SFX testsrvr.lua &
+  - lua$LUA_SFX testsrvr.lua > /dev/null &
   - lua$LUA_SFX testclnt.lua
   - lua$LUA_SFX stufftest.lua
   - lua$LUA_SFX excepttest.lua
