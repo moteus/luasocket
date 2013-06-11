@@ -10,7 +10,7 @@ env:
 
 branches:
   only:
-    - moteus-travis
+    - moteus
 
 before_install:
   - if [ $LUA = "luajit" ]; then

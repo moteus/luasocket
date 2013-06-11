@@ -1,6 +1,8 @@
 This is the LuaSocket 2.1. It has been tested on Windows 7, Mac OS X,
 and Linux. 
 
+!https://travis-ci.org/moteus/luasocket.png?branch=moteus!:https://travis-ci.org/moteus/luasocket
+
 Please use the project page at GitHub 
 
     https://github.com/diegonehab/luasocket
