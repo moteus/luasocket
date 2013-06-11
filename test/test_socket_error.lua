@@ -14,7 +14,7 @@ assert('timeout' == err)
 for i = 1, 10 do
   -- select pass even if socket has error
   local _, rec, err = socket.select(nil, {sock}, 1)
-  assert('timeout' == err)
+  assert('timeout' == err, 'unexpected error :' .. tostring(err))
   assert(not next(rec))
   err = sock:getoption("error") -- i get 'connection refused' on WinXP
   if err then

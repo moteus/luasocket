@@ -29,8 +29,8 @@ build = {
       LUAINC_linux="$(LUA_INCDIR)"
    },
    install_variables = {
-      INSTALL_TOP_SHARE = "$(LUADIR)",
-      INSTALL_TOP_LIB = "$(LIBDIR)"
+      INSTALL_TOP_LDIR = "$(LUADIR)",
+      INSTALL_TOP_CDIR = "$(LIBDIR)"
    },
    platforms = {
       macosx = {
