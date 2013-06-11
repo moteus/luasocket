@@ -4,6 +4,8 @@ local host, port = "127.0.0.1", "5462"
 
 assert(socket.bind(host, port)):close()
 
+socket.sleep(0.5)
+
 local sock = socket.tcp()
 sock:settimeout(0)
 
@@ -14,8 +16,9 @@ assert('timeout' == err)
 for i = 1, 10 do
   -- select pass even if socket has error
   local _, rec, err = socket.select(nil, {sock}, 1)
+  local _, ss = next(rec)
+  assert(ss == nil, "unexpected socket:" .. tostring(ss))
   assert('timeout' == err, 'unexpected error :' .. tostring(err))
-  assert(not next(rec))
   err = sock:getoption("error") -- i get 'connection refused' on WinXP
   if err then
     print("Passed! Error is '" .. err .. "'.")
