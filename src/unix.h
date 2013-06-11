@@ -8,7 +8,7 @@
 * domain.
 \*=========================================================================*/
 #include "lua.h"
-#include "luasocket.h"
+
 #include "buffer.h"
 #include "timeout.h"
 #include "socket.h"
