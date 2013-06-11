@@ -308,18 +308,18 @@ none:
 all: $(SOCKET_SO) $(MIME_SO)
 
 $(SOCKET_SO): $(SOCKET_OBJS)
-	$(LD) $(SOCKET_OBJS) $(LDFLAGS)$@
+	$(LD) $(SOCKET_OBJS) $(LDFLAGS) $@
 
 $(MIME_SO): $(MIME_OBJS)
-	$(LD) $(MIME_OBJS) $(LDFLAGS)$@
+	$(LD) $(MIME_OBJS) $(LDFLAGS) $@
 
 all-unix: all $(UNIX_SO) $(SERIAL_SO)
 
 $(UNIX_SO): $(UNIX_OBJS)
-	$(LD) $(UNIX_OBJS) $(LDFLAGS)$@
+	$(LD) $(UNIX_OBJS) $(LDFLAGS) $@
 
 $(SERIAL_SO): $(SERIAL_OBJS)
-	$(LD) $(SERIAL_OBJS) $(LDFLAGS)$@
+	$(LD) $(SERIAL_OBJS) $(LDFLAGS) $@
 
 install: 
 	$(INSTALL_DIR) $(INSTALL_TOP_LDIR)
