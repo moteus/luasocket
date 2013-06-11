@@ -25,7 +25,6 @@ dependencies = {
 build = {
    type = "make",
    build_variables = {
-      DEBUG="DEBUG",
       PLAT="linux",
       LUAINC_linux="$(LUA_INCDIR)"
    },

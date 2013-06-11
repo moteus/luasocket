@@ -31,7 +31,8 @@ before_install:
 
 
 install:
-  - sudo luarocks make rockspecs/luasocket-2.0.2.mot-1.rockspec 
+  - export DEBUG=DEBUG
+  - sudo -E luarocks make rockspecs/luasocket-2.0.2.mot-1.rockspec 
 
 script: 
   - cd test
