@@ -36,6 +36,17 @@ install:
 script: 
   - cd test
   - lua$LUA_SFX hello.lua
+  - lua$LUA_SFX stufftest.lua
+  - lua$LUA_SFX excepttest.lua
+  - lua$LUA_SFX test_bind.lua
+  - lua$LUA_SFX test_getaddrinfo.lua
+  - lua$LUA_SFX ltn12test.lua
+  - lua$LUA_SFX mimetest.lua
+  - lua$LUA_SFX urltest.lua
+  - lua$LUA_SFX udp_send_recv.lua
+  - lua$LUA_SFX test_setfd.lua
+  - lua$LUA_SFX test_local_address.lua
+  - lua$LUA_SFX test_socket_error.lua
 
 notifications:
   email:
