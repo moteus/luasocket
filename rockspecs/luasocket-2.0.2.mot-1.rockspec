@@ -25,9 +25,8 @@ dependencies = {
 build = {
    type = "make",
    build_variables = {
-      CFLAGS = "$(CFLAGS) -DLUASOCKET_DEBUG -I$(LUA_INCDIR)",
-      LDFLAGS = "$(LIBFLAG) -O -fpic",
-      LD = "$(CC)"
+      PLAT="linux",
+      LUAINC_linux="$(LUA_INCDIR)"
    },
    install_variables = {
       INSTALL_TOP_SHARE = "$(LUADIR)",
@@ -36,7 +35,8 @@ build = {
    platforms = {
       macosx = {
          build_variables = {
-            CFLAGS = "$(CFLAGS) -DLUASOCKET_DEBUG -DUNIX_HAS_SUN_LEN -fno-common -I$(LUA_INCDIR)"
+            PLAT="macosx",
+            LUAINC_macosx="$(LUA_INCDIR)"
          }
       },
       windows={
