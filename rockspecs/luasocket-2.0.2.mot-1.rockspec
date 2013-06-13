@@ -19,63 +19,88 @@ description = {
 }
 
 dependencies = {
-   "lua >= 5.1, < 5.3"
+   "lua >= 5.1"
 }
 
-build = {
-   type = "make",
-   build_variables = {
-      PLAT="linux",
-      LUAINC_linux="$(LUA_INCDIR)"
-   },
-   install_variables = {
-      INSTALL_TOP_LDIR = "$(LUADIR)",
-      INSTALL_TOP_CDIR = "$(LIBDIR)"
-   },
-   platforms = {
-      macosx = {
-         build_variables = {
-            PLAT="macosx",
-            LUAINC_macosx="$(LUA_INCDIR)"
-         }
+local function make_plat(plat)
+   local defines = {
+      unix = {
+         "LUASOCKET_DEBUG",
+         "LUASOCKET_API=__attribute__((visibility(\"default\")))",
+         "UNIX_API=__attribute__((visibility(\"default\")))",
+         "MIME_API=__attribute__((visibility(\"default\")))"
       },
-      windows={
-        type= "builtin",
-        modules = {
-          ["mime.core"] = {
-            sources = {"src/mime.c"},
-            defines = {
-              'MIME_EXPORTS',
-              'MIME_API=__declspec(dllexport)',
-              'WIN32','_WIN32','_WINDOWS',
-            },
-          },
-          ["socket.core"] = {
-            sources = {
-              "src/auxiliar.c","src/buffer.c","src/except.c","src/timeout.c",
-              "src/luasocket.c","src/options.c","src/select.c", "src/wsocket.c",
-              "src/io.c","src/tcp.c","src/udp.c","src/inet.c"
-            },
-            libraries = {"ws2_32", "iphlpapi"},
-            defines = {
-              'LUASOCKET_EXPORTS',
-              'LUASOCKET_API=__declspec(dllexport)',
-              'WIN32','_WIN32','_WINDOWS',
-              -- '_WIN32_WINNT=0x0501', 'LUASOCKET_INET_PTON',
-            },
-          },
-          ["ltn12"       ] = "src/ltn12.lua",
-          ["mime"        ] = "src/mime.lua",
-          ["socket"      ] = "src/socket.lua",
-          ["socket.ftp"  ] = "src/ftp.lua",
-          ["socket.http" ] = "src/http.lua",
-          ["socket.smtp" ] = "src/smtp.lua",
-          ["socket.tp"   ] = "src/tp.lua",
-          ["socket.url"  ] = "src/url.lua",
-        }
+      macosx = {
+         "LUASOCKET_DEBUG",
+         "UNIX_HAS_SUN_LEN",
+         "LUASOCKET_API=__attribute__((visibility(\"default\")))",
+         "UNIX_API=__attribute__((visibility(\"default\")))",
+         "MIME_API=__attribute__((visibility(\"default\")))"
+      },
+      win32 = {
+         "LUASOCKET_DEBUG",
+         "NDEBUG",
+         "LUASOCKET_API=__declspec(dllexport)",
+         "MIME_API=__declspec(dllexport)"
+      },
+      mingw32 = {
+         "LUASOCKET_DEBUG",
+         "LUASOCKET_INET_PTON",
+         "WINVER=0x0501",
+         "LUASOCKET_API=__declspec(dllexport)",
+         "MIME_API=__declspec(dllexport)"
       }
+   }
+   local modules = {
+   ["socket.core"] = {
+      sources = { "src/luasocket.c", "src/timeout.c", "src/buffer.c", "src/io.c", "src/auxiliar.c",
+         "src/options.c", "src/inet.c", "src/except.c", "src/select.c", "src/tcp.c", "src/udp.c" },
+      defines = defines[plat],
+      incdir = "/src"
+   },
+   ["mime.core"] = {
+      sources = { "src/mime.c" },
+      defines = defines[plat],
+      incdir = "/src"
+   },
+   ["socket.http"] = "src/http.lua",
+   ["socket.url"] = "src/url.lua",
+   ["socket.tp"] = "src/tp.lua",
+   ["socket.ftp"] = "src/ftp.lua",
+   ["socket.headers"] = "src/headers.lua",
+   ["socket.smtp"] = "src/smtp.lua",
+   ltn12 = "src/ltn12.lua",
+   socket = "src/socket.lua",
+   mime = "src/mime.lua"
+   }
+   if plat == "unix" or plat == "macosx" then
+      modules["socket.core"].sources[#modules["socket.core"].sources+1] = "src/usocket.c"
+      modules["socket.unix"] = {
+         sources = { "src/buffer.c", "src/auxiliar.c", "src/options.c", "src/timeout.c", "src/io.c",
+            "src/usocket.c", "src/unix.c" },
+         defines = defines[plat],
+         incdir = "/src"
+      }
+      modules["socket.serial"] = {
+         sources = { "src/buffer.c", "src/auxiliar.c", "src/options.c", "src/timeout.c",
+            "src/io.c", "src/usocket.c", "src/serial.c" },
+         defines = defines[plat],
+         incdir = "/src"
+      }
+   else
+      modules["socket.core"].sources[#modules["socket.core"].sources+1] = "src/wsocket.c"
+      modules["socket.core"].libraries = { "ws2_32", "iphlpapi" }
+   end
+   return { modules = modules }
+end
+
+build = {
+   type = "builtin",
+   platforms = {
+      unix = make_plat("unix"),
+      macosx = make_plat("macosx"),
+      win32 = make_plat("win32"),
+      mingw32 = make_plat("mingw32")
    },
    copy_directories = { "doc", "samples", "etc", "test" }
 }
-
-build.platforms.mingw32 = build.platforms.windows
