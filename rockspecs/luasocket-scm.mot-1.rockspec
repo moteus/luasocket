@@ -1,5 +1,5 @@
 package = "LuaSocket"
-version = "2.0.2.mot-1"
+version = "scm.mot-1"
 
 source = {
   url = "https://github.com/moteus/luasocket/archive/moteus.zip",

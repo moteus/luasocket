@@ -32,7 +32,7 @@ before_install:
 
 install:
   - export DEBUG=DEBUG
-  - sudo -E luarocks make rockspecs/luasocket-2.0.2.mot-1.rockspec 
+  - sudo -E luarocks make rockspecs/luasocket-scm.mot-1.rockspec 
 
 script: 
   - cd test
@@ -50,6 +50,8 @@ script:
   - lua$LUA_SFX test_setfd.lua
   - lua$LUA_SFX test_local_address.lua
   - lua$LUA_SFX test_socket_error.lua
+  - lua$LUA_SFX udp-zero-length-send
+  - lua$LUA_SFX udp-zero-length-send-recv
 
 notifications:
   email:
